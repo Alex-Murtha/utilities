@@ -1,0 +1,38 @@
+# Environment for every zsh, including non-interactive shells (agents, scripts).
+# Every source/eval is guarded so a partial install never breaks the shell.
+typeset -U path
+
+if [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
+path=(
+  "$HOME/.local/bin"
+  "$HOME/code/utilities/bin"
+  "$HOME/.dotnet"
+  "$HOME/.dotnet/tools"
+  "$HOME/go/bin"
+  $path
+)
+
+export DOTNET_ROOT="$HOME/.dotnet"
+export KUBE_EDITOR=nano
+export NVM_DIR="$HOME/.nvm"
+
+# Node on PATH without loading nvm.sh: resolve nvm's default alias (e.g. "26")
+# to the newest installed matching version and prepend its bin directory.
+if [[ -r "$NVM_DIR/alias/default" ]]; then
+  _utilities_node=$(<"$NVM_DIR/alias/default")
+  _utilities_node=${_utilities_node#v}
+  if [[ "$_utilities_node" =~ '^[0-9]+(\.[0-9]+){0,2}$' ]]; then
+    _utilities_node=( "$NVM_DIR"/versions/node/v${_utilities_node}(|.*)(N/nOn[1]) )
+    (( ${#_utilities_node} )) && path=("$_utilities_node[1]/bin" $path)
+  fi
+  unset _utilities_node
+fi
+
+if [[ -r "$HOME/.config/secrets.env" ]]; then
+  set -a
+  source "$HOME/.config/secrets.env"
+  set +a
+fi
