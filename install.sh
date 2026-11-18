@@ -15,7 +15,7 @@ NODE_MAJOR=26
 DOTNET_CHANNELS=(11.0 10.0) # first one owns the dotnet muxer
 
 DNF_PACKAGES=(
-  zsh git git-lfs gh curl wget unzip gcc fontconfig nano
+  zsh git git-lfs gh curl wget unzip gcc fontconfig nano which
   libatomic
   python3 python3-pip
   fzf jq zoxide fastfetch tree
