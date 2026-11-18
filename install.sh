@@ -516,7 +516,7 @@ summary() {
     printf 'Some steps failed; fix them and re-run install.sh.\n'
     exit 1
   fi
-  printf 'Next: run %s (or log out and back in so your login shell switches to zsh), then run ~/code/utilities/setup-interactive.sh\n' '`zsh`'
+  printf 'Next: run %s (or log out and back in so your login shell switches to zsh), then run ~/code/utilities/setup-interactive.sh\n' "\`zsh\`"
 }
 
 main() {
