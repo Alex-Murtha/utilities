@@ -101,6 +101,71 @@ apply_snippet() {
   return 0
 }
 
+# link_claude_hooks <repo_hooks_dir> <claude_dir>
+# Make <claude_dir>/hooks a symlink to the repo's hooks directory. A real
+# directory is moved aside to hooks.bak.<timestamp> first.
+link_claude_hooks() {
+  local src=$1 cdir=$2 dest="$2/hooks" bak
+  mkdir -p -- "$cdir" || return 1
+  if [[ -L "$dest" ]]; then
+    if [[ "$(readlink -- "$dest")" == "$src" ]]; then
+      SKIPPED+=("$dest")
+      return 0
+    fi
+    rm -f -- "$dest" || return 1
+  elif [[ -e "$dest" ]]; then
+    bak="$dest.bak.$(date +%Y%m%d%H%M%S)"
+    mv -- "$dest" "$bak" || return 1
+    log "moved existing $dest to $bak"
+  fi
+  ln -s -- "$src" "$dest" || return 1
+  INSTALLED+=("$dest")
+}
+
+# merge_claude_settings <hooks_json> <settings_file> <hooks_dir>
+# Replace .hooks in the settings file with the template's .hooks (placeholder
+# __HOOKS_DIR__ -> hooks_dir); every other key is kept. Missing file is created.
+merge_claude_settings() {
+  local tpl=$1 settings=$2 hdir=$3 real tmp
+  real=$settings
+  [[ -L "$settings" ]] && real=$(readlink -f -- "$settings")
+  mkdir -p -- "$(dirname -- "$real")" || return 1
+  if [[ -e "$real" ]] && ! jq -e . "$real" > /dev/null 2>&1; then
+    warn "$settings is not valid JSON; leaving it untouched"
+    return 1
+  fi
+  tmp=$(mktemp "$(dirname -- "$real")/.settings.XXXXXX") || return 1
+  if [[ -e "$real" ]]; then
+    jq --arg d "$hdir" --slurpfile t "$tpl" \
+      '.hooks = ($t[0].hooks | walk(if type == "string" then gsub("__HOOKS_DIR__"; $d) else . end))' \
+      "$real" > "$tmp"
+  else
+    jq -n --arg d "$hdir" --slurpfile t "$tpl" \
+      '{} | .hooks = ($t[0].hooks | walk(if type == "string" then gsub("__HOOKS_DIR__"; $d) else . end))' > "$tmp"
+  fi || {
+    rm -f -- "$tmp"
+    return 1
+  }
+  if [[ -e "$real" ]]; then
+    chmod --reference="$real" -- "$tmp" || {
+      rm -f -- "$tmp"
+      return 1
+    }
+  else
+    chmod 644 -- "$tmp"
+  fi
+  if [[ -e "$real" ]] && cmp -s -- "$tmp" "$real"; then
+    rm -f -- "$tmp"
+    SKIPPED+=("$settings")
+    return 0
+  fi
+  mv -f -- "$tmp" "$real" || {
+    rm -f -- "$tmp"
+    return 1
+  }
+  INSTALLED+=("$settings")
+}
+
 main() {
   log "not implemented yet"
 }

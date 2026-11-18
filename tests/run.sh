@@ -7,4 +7,6 @@ for t in tests/*.test.sh; do
   printf '== %s\n' "$t"
   bash "$t" || rc=1
 done
+printf '== %s\n' claude/hooks/tests.sh
+bash claude/hooks/tests.sh || rc=1
 exit "$rc"

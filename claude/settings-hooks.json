@@ -1,0 +1,23 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "__HOOKS_DIR__/no-secret-material.sh", "statusMessage": "Checking for secret material access" },
+          { "type": "command", "command": "__HOOKS_DIR__/no-full-test-suite.sh", "statusMessage": "Checking for full test suite run" },
+          { "type": "command", "command": "__HOOKS_DIR__/azure-guardrails.sh", "statusMessage": "Checking Azure/ACR guardrails" },
+          { "type": "command", "command": "__HOOKS_DIR__/orca-worktrees.sh", "statusMessage": "Checking for raw git worktree use" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "__HOOKS_DIR__/prettier.sh", "statusMessage": "Running prettier" }
+        ]
+      }
+    ]
+  }
+}
