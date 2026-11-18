@@ -89,6 +89,14 @@ apply_snippet() {
       rm -f -- "$tmp"
       return 1
     fi
+    local first_s first_e
+    first_s=$(grep -nxF -- "$MARK_START" "$real" | head -n1 | cut -d: -f1)
+    first_e=$(grep -nxF -- "$MARK_END" "$real" | head -n1 | cut -d: -f1)
+    if [[ -n "$first_s" && "$first_e" -lt "$first_s" ]]; then
+      warn "$target has an end marker before its start marker; not touching it"
+      rm -f -- "$tmp"
+      return 1
+    fi
     awk -v s="$MARK_START" -v e="$MARK_END" '
       $0 == s { skip = 1; next }
       skip && $0 == e { skip = 0; next }
@@ -216,7 +224,7 @@ prelude() {
 
   log "sudo is needed for dnf and the login shell"
   sudo -v || die "sudo authentication failed"
-  while sleep 60; do sudo -n true; done 2> /dev/null &
+  while sleep 60; do kill -0 "$$" 2> /dev/null || exit; sudo -n true; done 2> /dev/null &
   SUDO_KEEPALIVE_PID=$!
   trap 'kill "$SUDO_KEEPALIVE_PID" 2> /dev/null' EXIT
 
@@ -332,6 +340,7 @@ install_nvm() {
   fi
   local script
   script=$(curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh") || return 1
+  mkdir -p -- "$NVM_DIR" || return 1
   PROFILE=/dev/null NVM_DIR="$NVM_DIR" bash -c "$script" || return 1
   INSTALLED+=("nvm $NVM_VERSION")
 }
@@ -507,7 +516,7 @@ summary() {
     printf 'Some steps failed; fix them and re-run install.sh.\n'
     exit 1
   fi
-  printf 'Next: open a new zsh and run ~/code/utilities/setup-interactive.sh\n'
+  printf 'Next: run %s (or log out and back in so your login shell switches to zsh), then run ~/code/utilities/setup-interactive.sh\n' '`zsh`'
 }
 
 main() {

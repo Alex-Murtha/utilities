@@ -12,7 +12,7 @@ into place). Fedora only.
    curl -fsSL https://raw.githubusercontent.com/Alex-Murtha/utilities/main/install.sh | bash
    ```
 
-2. Open a new zsh, then run the interactive part (GitHub login, git
+2. Run `zsh` (or log out and back in so your login shell switches to zsh), then run the interactive part (GitHub login, git
    identity, Bitwarden token, secrets, repo cloning):
 
    ```
@@ -108,7 +108,9 @@ Secrets live in Bitwarden Secrets Manager, never in this repo.
    `owner/repo` per line (blank lines and `#` comments are ignored).
 4. Create a machine account with read access to that project and generate an
    access token. `setup-interactive.sh` asks for it (hidden input) and saves
-   it to `~/.config/bws/token`.
+   it to `~/.config/bws/token`, after checking it with `bws`; a rejected
+   token is not saved. If a saved token turns out to be wrong, run
+   `rm ~/.config/bws/token` and re-run `setup-interactive.sh`.
 
 `setup-interactive.sh` clones each repo to `~/code/<repo>` (override the
 root with `CODE_DIR`) unless the directory already exists. To pull changed or
@@ -125,5 +127,6 @@ and `install.sh` disagree.
 ## Tests
 
 `bash tests/run.sh` runs the unit tests. `bash tests/e2e.sh` runs
-`install.sh` and `setup-interactive.sh` twice inside a Fedora container (it
-never touches the host).
+`install.sh` twice inside a Fedora container (it never touches the host);
+`setup-interactive.sh` is covered by the unit tests with stubbed `gh` and
+`bws`.

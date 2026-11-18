@@ -36,6 +36,20 @@ apply_snippet "$snip" "$t"
 assert_eq "no trailing newline: line 1" "export A=1" "$(sed -n 1p "$t")"
 assert_eq "no trailing newline: marker on own line" "$START" "$(sed -n 2p "$t")"
 
+# refusals leave the file untouched
+t="$SANDBOX/unterm"
+printf 'a\n%s\nuser\n' "$START" > "$t"
+before=$(cat "$t")
+apply_snippet "$snip" "$t" > /dev/null 2>&1
+assert_eq "unterminated start: rc 1" "1" "$?"
+assert_eq "unterminated start: unchanged" "$before" "$(cat "$t")"
+t="$SANDBOX/endfirst"
+printf 'a\n%s\nuser\n%s\nb\n' "$END" "$START" > "$t"
+before=$(cat "$t")
+apply_snippet "$snip" "$t" > /dev/null 2>&1
+assert_eq "end before start: rc 1" "1" "$?"
+assert_eq "end before start: unchanged" "$before" "$(cat "$t")"
+
 # idempotent
 t="$SANDBOX/idem"
 printf 'export A=1\n' > "$t"

@@ -33,7 +33,7 @@ clone_repos() {
       continue
     fi
     log "clone $repo"
-    if gh repo clone "$repo" "$dest/$name"; then
+    if gh repo clone "$repo" "$dest/$name" < /dev/null; then
       INSTALLED+=("clone $repo")
     else
       FAILED+=("clone $repo")
@@ -81,10 +81,15 @@ save_bws_token() {
     return 0
   fi
   IFS= read -r tok || [[ -n "$tok" ]] || true
+  tok=${tok//[[:space:]]/}
   [[ -n "$tok" ]] || {
     warn "empty token; not saved"
     return 1
   }
+  if ! BWS_ACCESS_TOKEN="$tok" bws secret list > /dev/null 2>&1; then
+    warn "token rejected by bws; not saved"
+    return 1
+  fi
   dir=$(dirname -- "$file")
   mkdir -p -- "$dir" && chmod 700 "$dir" || return 1
   tmp=$(umask 077 && mktemp "$dir/.token.XXXXXX") || return 1
@@ -157,7 +162,8 @@ main() {
   try "git identity" set_git_identity
   step_token
   log "secrets"
-  try "secrets-refresh" "$SETUP_DIR/bin/secrets-refresh"
+  try "secrets-refresh" "$SETUP_DIR/bin/secrets-refresh" ||
+    warn "if the token is wrong: rm ~/.config/bws/token and re-run"
   step_clone
   summary
   cat "$UTILITIES_DIR/docs/post-setup.md"

@@ -49,6 +49,12 @@ assert_eq "identity: email kept" "keep@example.com" "$(git config --global user.
 assert_eq "identity: name filled" "u" "$(git config --global user.name)"
 
 # save_bws_token
+cat > "$SANDBOX/stubs/bws" << 'STUB'
+#!/usr/bin/env bash
+[[ "${BWS_ACCESS_TOKEN:-}" != bad ]]
+STUB
+chmod +x "$SANDBOX/stubs/bws"
+export PATH="$SANDBOX/stubs:$PATH"
 tf="$SANDBOX/cfg/bws/token"
 printf 'secret1\n' | save_bws_token "$tf" > /dev/null
 assert_eq "token: content" "secret1" "$(cat "$tf")"
@@ -56,6 +62,14 @@ assert_eq "token: file mode" "600" "$(stat -c %a "$tf")"
 assert_eq "token: dir mode" "700" "$(stat -c %a "$(dirname "$tf")")"
 printf 'secret2\n' | save_bws_token "$tf" > /dev/null
 assert_eq "token: not overwritten" "secret1" "$(cat "$tf")"
+
+tf2="$SANDBOX/cfg2/bws/token"
+printf '  secret3 \r\n' | save_bws_token "$tf2" > /dev/null
+assert_eq "token: whitespace trimmed" "secret3" "$(cat "$tf2")"
+tf3="$SANDBOX/cfg3/bws/token"
+printf 'bad\n' | save_bws_token "$tf3" > /dev/null 2>&1
+assert_eq "token: rejected by bws -> rc 1" "1" "$?"
+if [[ -e "$tf3" ]]; then _bad "token: rejected token not saved"; else _ok "token: rejected token not saved"; fi
 
 # fetch_clone_list
 printf 'tok\n' > "$SANDBOX/tokfile"
