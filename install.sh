@@ -12,10 +12,13 @@ UTILITIES_REF="${UTILITIES_REF:-main}"
 NVM_VERSION=v0.41.0
 NERD_FONTS_VERSION=v3.5.1
 NODE_MAJOR=26
+OMZ_REF=c0140703a53eb0d22be44f7bac318d0baacc927c # Oh My Zsh has no release tags
+P10K_REF=v1.20.0
 DOTNET_CHANNELS=(11.0 10.0) # first one owns the dotnet muxer
 
 DNF_PACKAGES=(
   zsh git git-lfs gh curl wget unzip gcc fontconfig nano which
+  zsh-autosuggestions zsh-syntax-highlighting
   libatomic
   python3 python3-pip
   fzf jq zoxide fastfetch tree
@@ -31,6 +34,7 @@ BREW_FORMULAE=(k3d devspace earthbuild/tap/earth)
 BREW=/home/linuxbrew/.linuxbrew/bin/brew
 NVM_DIR="$HOME/.nvm"
 FONT_DIR="$HOME/.local/share/fonts/NerdFonts"
+OMZ_DIR="$HOME/.oh-my-zsh"
 
 MARK_START='# >>> utilities >>>'
 MARK_END='# <<< utilities <<<'
@@ -143,6 +147,58 @@ apply_snippet() {
   }
   INSTALLED+=("$target")
   return 0
+}
+
+# git_checkout_at <label> <url> <ref> <dir>
+# Make <dir> a git checkout of <url> at <ref> (a 40-hex commit SHA or a tag
+# name), detached. A missing <dir> is cloned next to the target and moved into
+# place; an existing checkout is fetched and moved to <ref> in place, keeping
+# its untracked files. Anything else at <dir> is left alone and is an error.
+git_checkout_at() {
+  local label=$1 url=$2 ref=$3 dir=$4 spec parent tmp want
+  if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+    spec=$ref
+  else
+    spec="refs/tags/$ref:refs/tags/$ref"
+  fi
+
+  # -ef: <dir> must be the top of its own repository. Otherwise (a damaged
+  # .git, say) git would walk up and operate on an enclosing repository.
+  if [[ -e "$dir/.git" && "$(git -C "$dir" rev-parse --show-toplevel 2> /dev/null)" -ef "$dir" ]]; then
+    want=$(git -C "$dir" rev-parse -q --verify "$ref^{commit}" 2> /dev/null)
+    if [[ -n "$want" && "$want" == "$(git -C "$dir" rev-parse HEAD 2> /dev/null)" ]]; then
+      SKIPPED+=("$label")
+      return 0
+    fi
+    if ! { git -C "$dir" fetch -q --depth 1 "$url" "$spec" &&
+      git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$ref^{commit}"; }; then
+      warn "could not move $dir to $ref"
+      return 1
+    fi
+    INSTALLED+=("$label")
+    return 0
+  fi
+
+  if [[ -e "$dir" || -L "$dir" ]]; then
+    warn "$dir exists but is not a git checkout; not touching it"
+    return 1
+  fi
+
+  parent=$(dirname -- "$dir")
+  mkdir -p -- "$parent" || return 1
+  tmp=$(mktemp -d "$parent/.$(basename -- "$dir").XXXXXX") || return 1
+  if git init -q "$tmp/repo" &&
+    git -C "$tmp/repo" remote add origin "$url" &&
+    git -C "$tmp/repo" fetch -q --depth 1 origin "$spec" &&
+    git -C "$tmp/repo" -c advice.detachedHead=false checkout -q --detach "$ref^{commit}" &&
+    mv -- "$tmp/repo" "$dir"; then
+    rmdir -- "$tmp"
+  else
+    rm -rf -- "$tmp"
+    warn "could not clone $url at $ref"
+    return 1
+  fi
+  INSTALLED+=("$label")
 }
 
 # link_claude_hooks <repo_hooks_dir> <claude_dir>
@@ -483,6 +539,13 @@ step_font() {
   try "nerd font" install_font
 }
 
+step_zsh() {
+  log "oh my zsh + powerlevel10k"
+  try "oh my zsh" git_checkout_at "oh my zsh" https://github.com/ohmyzsh/ohmyzsh.git "$OMZ_REF" "$OMZ_DIR" || return 0
+  try powerlevel10k git_checkout_at "powerlevel10k $P10K_REF" https://github.com/romkatv/powerlevel10k.git \
+    "$P10K_REF" "$OMZ_DIR/custom/themes/powerlevel10k"
+}
+
 step_snippets() {
   log "shell snippets"
   try "zshenv snippet" apply_snippet "$UTILITIES_DIR/snippets/zshenv" "$HOME/.zshenv"
@@ -526,6 +589,7 @@ main() {
   step_brew
   step_installers
   step_font
+  step_zsh
   step_snippets
   step_claude
   summary

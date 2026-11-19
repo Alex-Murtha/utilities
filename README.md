@@ -31,6 +31,24 @@ anything failed. Manual logins that remain are in
 Every tool, its install source, and the version pins are listed in
 [docs/tools.md](docs/tools.md).
 
+## Shell prompt
+
+`install.sh` sets up [Oh My Zsh](https://github.com/ohmyzsh/ohmyzsh) (for
+plugins) and [powerlevel10k](https://github.com/romkatv/powerlevel10k) (for
+the prompt), both pinned, plus `zsh-autosuggestions` and
+`zsh-syntax-highlighting`. The prompt is configured by
+[zsh/p10k.zsh](zsh/p10k.zsh), which `~/.zshrc` reads straight from the
+clone: edit it there and open a new shell. Don't run `p10k configure`; it
+writes a separate `~/.p10k.zsh` and offers to load it from `~/.zshrc`, which
+would override the config in this repo.
+
+- The first interactive shell downloads powerlevel10k's `gitstatusd` helper
+  (its own installer), so it needs network access once.
+- `install.sh` only manages the block between the `# >>> utilities >>>`
+  markers in `~/.zshrc`. If the file already loads Oh My Zsh or sets a theme
+  above that block (for example the stock Oh My Zsh template), delete those
+  lines by hand, or Oh My Zsh is loaded twice.
+
 ## Bitwarden setup (one time)
 
 Secrets live in Bitwarden Secrets Manager, never in this repo.

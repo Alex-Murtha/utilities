@@ -147,4 +147,30 @@ if as_tester test -L /home/tester/.claude/hooks; then _ok "claude hooks dir is a
 shell=$(as_tester getent passwd tester | cut -d: -f7)
 assert_eq "login shell is zsh" zsh "$(basename -- "${shell:-none}")"
 
+# --- prompt and plugins ---------------------------------------------------
+# Read the pins from install.sh without running it.
+OMZ_REF=$(UTILITIES_SOURCE_ONLY=1 bash -c 'source "$1" && printf %s "$OMZ_REF"' _ "$ROOT/install.sh")
+P10K_REF=$(UTILITIES_SOURCE_ONLY=1 bash -c 'source "$1" && printf %s "$P10K_REF"' _ "$ROOT/install.sh")
+assert_eq "oh my zsh at the pinned commit" "$OMZ_REF" \
+  "$(as_tester git -C /home/tester/.oh-my-zsh rev-parse HEAD 2>&1)"
+assert_eq "powerlevel10k at the pinned tag" "$P10K_REF" \
+  "$(as_tester git -C /home/tester/.oh-my-zsh/custom/themes/powerlevel10k describe --tags --exact-match 2>&1)"
+
+# Interactive zsh on a pty (as a terminal would start it), clean environment.
+# The probe writes its results to a file so prompt output cannot mix in.
+docker exec -t -u tester -w /home/tester "$NAME" \
+  env -i HOME=/home/tester USER=tester TERM=xterm-256color PATH=/usr/local/bin:/usr/bin:/bin \
+  zsh -ic 'print -r -- "p10k=$+functions[p10k] autosuggest=$+functions[_zsh_autosuggest_start] highlight=$+functions[_zsh_highlight] gst=$+aliases[gst] k=$+aliases[k] sudo=$+widgets[sudo-command-line] extract=$+functions[extract] mode=$POWERLEVEL9K_MODE" > ~/.e2e-probe' \
+  > "$LOGS/interactive.log" 2>&1
+assert_eq "interactive zsh exits 0" 0 "$?"
+assert_eq "interactive zsh: prompt and plugins loaded" \
+  "p10k=1 autosuggest=1 highlight=1 gst=1 k=1 sudo=1 extract=1 mode=nerdfont-v3" \
+  "$(as_tester cat /home/tester/.e2e-probe 2>&1)"
+if grep -qiE 'error|not found|no such file|warning' "$LOGS/interactive.log"; then
+  _bad "interactive zsh: no errors on startup"
+  show_tail "$LOGS/interactive.log"
+else
+  _ok "interactive zsh: no errors on startup"
+fi
+
 finish

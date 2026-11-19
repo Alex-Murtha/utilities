@@ -50,7 +50,9 @@ mechanism.
   Fedora installs only; no migration or cleanup of the old setup, and the old
   repo's fate is out of scope.
 - **Zsh framework, plugins, prompt.** Deliberately left out; the user is
-  evaluating frameworks and will add one later.
+  evaluating frameworks and will add one later. (Added on 2026-11-19: see
+  `2026-11-19-zsh-prompt-design.md`, which supersedes every "no plugins or
+  prompt" statement in this document.)
 - **Version managers beyond nvm.** No mise, no asdf.
 - **Deliberately dropped from the old setup:** ripgrep, fd, btop, Azure
   kubelogin, mise, VS Code + extensions, Docker, Oh My Zsh + p10k, Aikido
@@ -105,6 +107,7 @@ bin/secrets-refresh        # on PATH via ~/code/utilities/bin
 snippets/zshenv            # appended to ~/.zshenv
 snippets/zshrc             # appended to ~/.zshrc
 snippets/lazygit.yml       # appended to ~/.config/lazygit/config.yml
+zsh/p10k.zsh               # powerlevel10k config, sourced from the clone (added 2026-11-19)
 claude/hooks/*.sh          # Claude Code hooks + tests.sh
 claude/settings-hooks.json # the "hooks" object merged into ~/.claude/settings.json
 docs/post-setup.md         # manual logins, printed by script 2
