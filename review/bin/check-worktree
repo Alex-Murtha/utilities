@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# check-worktree <path> <expected_sha>
+# Reports whether a worktree is at the expected commit and whether it has
+# uncommitted changes to tracked files or untracked files. Read-only.
+# Exits 2 if <path> is not a git work tree.
+set -uo pipefail
+
+path=${1:?usage: check-worktree <path> <expected_sha>}
+want=${2:?usage: check-worktree <path> <expected_sha>}
+
+if [[ "$(git -C "$path" rev-parse --is-inside-work-tree 2> /dev/null)" != "true" ]]; then
+  printf 'check-worktree: not a git work tree: %s\n' "$path" >&2
+  exit 2
+fi
+
+head=$(git -C "$path" rev-parse HEAD) || exit 1
+want_full=$(git -C "$path" rev-parse --verify --quiet "$want^{commit}" 2> /dev/null || printf '%s' "$want")
+dirty=false untracked=false
+[[ -n "$(git -C "$path" status --porcelain --untracked-files=no)" ]] && dirty=true
+[[ -n "$(git -C "$path" ls-files --others --exclude-standard)" ]] && untracked=true
+
+jq -n --arg h "$head" --arg w "$want_full" --argjson d "$dirty" --argjson u "$untracked" \
+  '{head: $h, matches: ($h == $w), dirty: $d, untracked: $u}'
