@@ -8,7 +8,9 @@ export UTILITIES_SOURCE_ONLY=1
 source "$ROOT/install.sh"
 
 README="$ROOT/README.md"
+TOOLS="$ROOT/docs/tools.md"
 [[ -r "$README" ]] || { _bad "README.md readable"; finish; exit 1; }
+[[ -r "$TOOLS" ]] || { _bad "docs/tools.md readable"; finish; exit 1; }
 
 # check <label> <cmd...>: pass when cmd succeeds.
 check() {
@@ -18,7 +20,7 @@ check() {
 }
 
 # Table rows look like: | `tool` | source | script |
-row_for() { grep -E "^\| \`$1\` \|" "$README"; }
+row_for() { grep -E "^\| \`$1\` \|" "$TOOLS"; }
 
 for p in "${DNF_PACKAGES[@]}"; do
   row=$(row_for "$p")
@@ -42,17 +44,16 @@ while IFS= read -r name; do
     [[ "$p" == "$name" ]] && found=1
   done
   check "table row in install.sh: $name" test "$found" -eq 1
-done < <(grep -E '^[|] .[^ ]+. [|] (dnf|brew)' "$README" | sed -E 's/^[|] .([^ ]+).[ ].*/\1/')
+done < <(grep -E '^[|] .[^ ]+. [|] (dnf|brew)' "$TOOLS" | sed -E 's/^[|] .([^ ]+).[ ].*/\1/')
 
 # Pins documented.
 for v in "$NVM_VERSION" "$NERD_FONTS_VERSION" "$NODE_MAJOR" "${DOTNET_CHANNELS[@]}"; do
-  assert_contains "pin in README: $v" "$README" "$v"
+  assert_contains "pin in tools.md: $v" "$TOOLS" "$v"
 done
 
 assert_contains "one-liner" "$README" "curl -fsSL https://raw.githubusercontent.com/Alex-Murtha/utilities/main/install.sh | bash"
-assert_contains "marker start" "$README" "$MARK_START"
-assert_contains "marker end" "$README" "$MARK_END"
 assert_contains "links post-setup" "$README" "docs/post-setup.md"
+assert_contains "links tools" "$README" "docs/tools.md"
 
 # post-setup: terminal-readable, lines <= 80 chars.
 PS="$ROOT/docs/post-setup.md"
