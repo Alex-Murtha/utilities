@@ -32,6 +32,11 @@ S="$ROOT/claude/skills/review-council/SKILL.md"
 assert_contains "skill: no posting after mismatched review" "$S" "Do not offer posting if the worktree did not match the PR head"
 assert_contains "skill: large diff split" "$S" "diff_lines"
 
+assert_contains "synthesizer: plain comment bodies" "$R/synthesizer.md" "never a finding number, severity, verdict or reviewer name"
+assert_contains "skill: one comment per finding" "$S" "Each finding is posted as its own comment"
+assert_count "skill: no summary body file" "$S" "post-body.md" 0
+assert_count "skill: no --body-file" "$S" "--body-file" 0
+
 # Agent-neutral: no Claude-specific tool names anywhere under review/.
 hits=$(grep -rlE 'mcp__|Agent tool|subagent_type|TodoWrite' "$R" 2> /dev/null)
 assert_eq "review/ is agent-neutral" "" "$hits"

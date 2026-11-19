@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # post-review --repo <owner/repo> --pr <n> --event COMMENT|REQUEST_CHANGES
-#             --body-file <md> --comments <json> [--dry-run]
-# Posts one PR review. <json> is [{"path","line","body"}]. Comments whose line
-# is not on the right side of the PR diff can't be inline, so they go into the
-# body under "### Other findings". Never approves: any other event exits 2
-# before gh is called.
+#             --comments <json> [--dry-run]
+# Posts each finding as its own comment, with no summary. <json> is
+# [{"path","line","body"}].
+#   - line on the right side of the PR diff  -> inline review comment
+#   - file in the PR, line not in the diff    -> file-level review comment ("Line N: ...")
+#   - file not in the PR, or no file          -> separate PR conversation comment
+# Review comments go in one review with an empty body. If REQUEST_CHANGES has
+# no review comments, the first PR comment becomes the review's body (the API
+# needs one). Never approves: any other event exits 2 before gh is called.
 set -uo pipefail
 
 die() {
@@ -12,13 +16,12 @@ die() {
   exit "$1"
 }
 
-repo="" pr="" event="" body_file="" comments="" dry=0
+repo="" pr="" event="" comments="" dry=0
 while (($#)); do
   case $1 in
     --repo) repo=${2:-}; shift 2 ;;
     --pr) pr=${2:-}; shift 2 ;;
     --event) event=${2:-}; shift 2 ;;
-    --body-file) body_file=${2:-}; shift 2 ;;
     --comments) comments=${2:-}; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) die 2 "unknown argument: $1" ;;
@@ -31,38 +34,56 @@ case $event in
   APPROVE) die 2 "refusing to approve: approval is always manual" ;;
   *) die 2 "event must be COMMENT or REQUEST_CHANGES, got '$event'" ;;
 esac
-[[ -n "$repo" && -n "$pr" && -r "$body_file" && -r "$comments" ]] ||
-  die 2 "usage: post-review --repo <owner/repo> --pr <n> --event COMMENT|REQUEST_CHANGES --body-file <md> --comments <json> [--dry-run]"
-jq -e 'type == "array"' "$comments" > /dev/null 2>&1 || die 2 "$comments is not a JSON array"
+[[ -n "$repo" && -n "$pr" && -r "$comments" ]] ||
+  die 2 "usage: post-review --repo <owner/repo> --pr <n> --event COMMENT|REQUEST_CHANGES --comments <json> [--dry-run]"
+jq -e 'type == "array" and length > 0' "$comments" > /dev/null 2>&1 || die 2 "$comments must be a non-empty JSON array"
 
 diff=$(gh pr diff "$pr" --repo "$repo") || die 1 "gh pr diff failed"
 
-# Right-side (new file) line numbers that a review comment can attach to:
-# {"path": [line, ...], ...}
-commentable=$(awk '
-  /^\+\+\+ / { path = substr($0, 5); sub(/^b\//, "", path); if (path == "/dev/null") path = ""; next }
-  /^--- / { next }
-  /^@@ / { split($3, a, ","); n = substr(a[1], 2) + 0; next }
-  path == "" { next }
-  /^[ +]/ { printf "%s\t%d\n", path, n; n++; next }
+# Files in the PR and the right-side (new file) lines a comment can attach to:
+# {"files": {"path": [line, ...], ...}}. Header lines are only read between
+# "diff --git" and the first hunk, so an added line starting with "++" is content.
+diffmap=$(awk '
+  /^diff --git / { hdr = 1; path = $NF; sub(/^b\//, "", path); printf "F\t%s\n", path; next }
+  hdr && /^\+\+\+ / { p = substr($0, 5); if (p != "/dev/null") { sub(/^b\//, "", p); path = p }; next }
+  hdr && /^--- / { next }
+  /^@@ / { hdr = 0; split($3, a, ","); n = substr(a[1], 2) + 0; next }
+  hdr { next }
+  /^[ +]/ { printf "L\t%s\t%d\n", path, n; n++; next }
 ' <<< "$diff" | jq -R -s '
-  split("\n") | map(select(length > 0) | split("\t") | {path: .[0], line: (.[1] | tonumber)})
-  | group_by(.path) | map({key: .[0].path, value: map(.line)}) | from_entries')
+  split("\n") | map(select(length > 0) | split("\t"))
+  | reduce .[] as $r ({};
+      if $r[0] == "F" then .[$r[1]] //= []
+      else .[$r[1]] += [($r[2] | tonumber)] end)')
 
-payload=$(jq --arg event "$event" --rawfile body "$body_file" --argjson ok "$commentable" '
-  def inline: . as $c | ($c.line | type) == "number" and (($ok[$c.path] // []) | index($c.line)) != null;
-  (map(select(inline))) as $in
-  | (map(select(inline | not))) as $out
-  | {
-      event: $event,
-      body: ($body + (if ($out | length) > 0
-        then "\n\n### Other findings\n\n" + ($out | map(if .path == null then "- \(.body)" else "- `\(.path):\(.line // "-")` — \(.body)" end) | join("\n"))
-        else "" end)),
-      comments: ($in | map({path, line, side: "RIGHT", body}))
-    }' "$comments") || die 1 "could not build the review payload"
+payload=$(jq --arg event "$event" --argjson files "$diffmap" '
+  map(. as $c
+    | ((($c.path | type) == "string") and ($files | has($c.path))) as $in_pr
+    | if $in_pr and ($c.line | type) == "number" and ($files[$c.path] | index($c.line)) != null then
+        {kind: "review", c: {path: $c.path, line: $c.line, side: "RIGHT", body: $c.body}}
+      elif $in_pr then
+        {kind: "review", c: {path: $c.path, subject_type: "file",
+          body: (if ($c.line | type) == "number" then "Line \($c.line): \($c.body)" else $c.body end)}}
+      elif ($c.path | type) == "string" then
+        {kind: "pr", c: ("In `\($c.path)`" + (if ($c.line | type) == "number" then " (line \($c.line))" else "" end) + ":\n\n\($c.body)")}
+      else {kind: "pr", c: $c.body} end)
+  | (map(select(.kind == "review") | .c)) as $rc
+  | (map(select(.kind == "pr") | .c)) as $pc
+  | if ($rc | length) > 0 then {review: {event: $event, body: "", comments: $rc}, pr_comments: $pc}
+    elif $event == "REQUEST_CHANGES" then {review: {event: $event, body: $pc[0], comments: []}, pr_comments: $pc[1:]}
+    else {review: null, pr_comments: $pc} end' "$comments") || die 1 "could not build the review payload"
 
 if ((dry)); then
   printf '%s\n' "$payload"
   exit 0
 fi
-gh api -X POST "repos/$repo/pulls/$pr/reviews" --input - <<< "$payload"
+
+if [[ "$(jq -r '.review != null' <<< "$payload")" == "true" ]]; then
+  jq '.review' <<< "$payload" | gh api -X POST "repos/$repo/pulls/$pr/reviews" --input - --jq .html_url ||
+    die 1 "posting the review failed; no PR comments were posted"
+fi
+n=$(jq '.pr_comments | length' <<< "$payload")
+for ((i = 0; i < n; i++)); do
+  jq "{body: .pr_comments[$i]}" <<< "$payload" | gh api -X POST "repos/$repo/issues/$pr/comments" --input - --jq .html_url ||
+    die 1 "posting PR comment $((i + 1)) of $n failed"
+done

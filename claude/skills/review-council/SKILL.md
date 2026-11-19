@@ -172,20 +172,26 @@ same placeholders, with `{{RUN_NOTES}}` set to `$RUN/run-notes.md`. Then:
 
 Never offer this for a branch.
 Do not offer posting if the worktree did not match the PR head (the user
-chose to review it as it was): line numbers would point at the wrong code. Say so instead. For a PR, ask the user:
+chose to review it as it was): line numbers would point at the wrong code.
+Say so instead. For a PR, ask the user:
 1. Post to the PR? If not, stop.
 2. Which findings, by number (`F1, F3`), or `all`. Use `report-findings.json`.
 3. As **Comment** or **Request changes**. Never offer Approve; approval is
    always manual.
 
+Each finding is posted as its own comment, with no summary, verdict or
+finding numbers. A finding on a changed line is an inline comment. One about
+another line of a changed file is a comment on that file. One that needs a
+change outside the PR is a separate comment on the PR conversation.
+
 Then:
-1. Write the chosen entries as `[{"path","line","body"}]` to
-   `$RUN/post-comments.json`.
-2. Write a short body (the suggested verdict and one line per finding) to
-   `$RUN/post-body.md`.
-3. Show the user the output of
-   `$REVIEW_DIR/bin/post-review --repo <owner>/<repo> --pr <n> --event <COMMENT|REQUEST_CHANGES> --body-file $RUN/post-body.md --comments $RUN/post-comments.json --dry-run`.
-4. After an explicit yes, run the same command without `--dry-run`. Give
-   the user the review link.
+1. Write the chosen entries from `report-findings.json` as
+   `[{"path","line","body"}]` to `$RUN/post-comments.json`. Use each
+   `body` as written, with no number, severity or prefix added.
+2. Show the user the output of
+   `$REVIEW_DIR/bin/post-review --repo <owner>/<repo> --pr <n> --event <COMMENT|REQUEST_CHANGES> --comments $RUN/post-comments.json --dry-run`,
+   as a short list: where each comment will go, and its text.
+3. After an explicit yes, run the same command without `--dry-run`. Give
+   the user the links it prints.
 
 Nothing is posted without that final yes.
