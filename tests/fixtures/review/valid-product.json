@@ -1,0 +1,13 @@
+{
+  "reviewer": "product",
+  "model": "claude",
+  "summary": "Card is mostly met.",
+  "findings": [],
+  "extras": {
+    "card": "ABC-123",
+    "ac_source": "inferred",
+    "requirements": [
+      {"requirement": "The error no longer happens", "status": "met", "where": "src/a.sh:11"}
+    ]
+  }
+}

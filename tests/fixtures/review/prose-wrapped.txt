@@ -1,0 +1,20 @@
+Here is my review:
+
+```json
+{
+  "reviewer": "code",
+  "model": "claude",
+  "summary": "Small, readable change with one real bug.",
+  "findings": [
+    {"id": "code-1", "severity": "major", "confidence": "high", "file": "src/a.sh", "line": 11,
+     "title": "Unquoted variable", "evidence": "rm $dir/*", "suggestion": "Quote it."},
+    {"id": "code-2", "severity": "nit", "confidence": "low", "file": "src/b.sh", "line": null,
+     "title": "Naming", "evidence": "x", "suggestion": "Rename."},
+    {"id": "code-3", "severity": "minor", "confidence": "medium", "file": null, "line": null,
+     "title": "No tests", "evidence": "No test files changed.", "suggestion": "Add one."}
+  ],
+  "extras": {}
+}
+```
+
+Thanks!

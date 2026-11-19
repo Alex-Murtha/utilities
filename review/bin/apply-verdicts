@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# apply-verdicts <review.json> <verdicts.json>
+# Prints the review with refuted findings removed and each remaining finding
+# tagged with verdict + verdict_reason. Findings with no verdict are kept as
+# "unverified".
+set -uo pipefail
+
+review=${1:?usage: apply-verdicts <review.json> <verdicts.json>}
+verdicts=${2:?usage: apply-verdicts <review.json> <verdicts.json>}
+
+jq --slurpfile v "$verdicts" '
+  ($v[0] | map({key: .id, value: .}) | from_entries) as $by
+  | .findings |= [ .[]
+      | . as $f
+      | ($by[$f.id] // {verdict: "unverified", reason: null}) as $d
+      | select($d.verdict != "refuted")
+      | . + {verdict: $d.verdict, verdict_reason: $d.reason} ]' "$review"

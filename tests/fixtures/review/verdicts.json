@@ -1,0 +1,4 @@
+[
+  {"id": "code-1", "verdict": "confirmed", "reason": "Line 11 is unquoted."},
+  {"id": "code-2", "verdict": "refuted", "reason": "Name matches repo convention."}
+]
