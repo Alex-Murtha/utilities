@@ -83,8 +83,10 @@ into one report.
   are never cleaned up automatically.
 - An existing Orca worktree for the PR is reused. Otherwise one is created
   and kept afterwards.
-- Posting to the PR is opt-in: you pick the findings and Comment or Request
-  changes, see a dry run, and confirm. It never approves.
+- Posting to the PR is opt-in. You pick the findings and Comment or Request
+  changes, then review every drafted comment (reword, drop or move any of
+  them, in chat or in `post-drafts.md`) before saying to post. Each finding
+  is its own comment, and it never approves.
 
 Reviewer instructions live in `review/` and are agent-neutral, so other
 agents can run them later. The helpers in `review/bin/` are tested by

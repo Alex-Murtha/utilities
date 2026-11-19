@@ -184,14 +184,40 @@ finding numbers. A finding on a changed line is an inline comment. One about
 another line of a changed file is a comment on that file. One that needs a
 change outside the PR is a separate comment on the PR conversation.
 
-Then:
-1. Write the chosen entries from `report-findings.json` as
-   `[{"path","line","body"}]` to `$RUN/post-comments.json`. Use each
-   `body` as written, with no number, severity or prefix added.
-2. Show the user the output of
-   `$REVIEW_DIR/bin/post-review --repo <owner>/<repo> --pr <n> --event <COMMENT|REQUEST_CHANGES> --comments $RUN/post-comments.json --dry-run`,
-   as a short list: where each comment will go, and its text.
-3. After an explicit yes, run the same command without `--dry-run`. Give
-   the user the links it prints.
+### Draft the comments
 
-Nothing is posted without that final yes.
+Write the chosen entries from `report-findings.json` as
+`[{"path","line","body"}]` to `$RUN/post-comments.json`. Use each `body` as
+written, with no number, severity or prefix added.
+
+### Review the drafted comments
+
+Nothing goes to GitHub until the user has seen every comment exactly as it
+will be posted and said to post them.
+
+1. Run
+   `$REVIEW_DIR/bin/post-review --repo <owner>/<repo> --pr <n> --event <COMMENT|REQUEST_CHANGES> --comments $RUN/post-comments.json --dry-run`.
+   From its output, write `$RUN/post-drafts.md`. Number the drafts `1`, `2`,
+   ... in posting order. For each, give where it goes (`path:line` inline, file
+   comment on `path`, or PR conversation) and then its full text, exactly as
+   it will appear.
+2. Show the user the drafts in full and give the path to `post-drafts.md`.
+   Ask what to change. They can:
+   - reword a draft, by telling you or by editing its text in
+     `post-drafts.md`
+   - drop a draft
+   - move a draft to another line or file
+   - switch between Comment and Request changes
+3. Apply the changes to `post-comments.json`. If the user edited
+   `post-drafts.md`, read their wording from it, word for word. Then run the
+   dry run again and show the updated drafts.
+4. Repeat until the user says to post. Approval of one draft, or a
+   question, is not a go-ahead; only an explicit "post" (or equivalent) is.
+
+### Post
+
+Run the same command without `--dry-run`. Give the user the links it prints.
+If it fails partway, say which comments were posted and which weren't. Do
+not retry on your own.
+
+Nothing is posted without that explicit go-ahead.

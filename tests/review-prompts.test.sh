@@ -37,6 +37,9 @@ assert_contains "skill: one comment per finding" "$S" "Each finding is posted as
 assert_count "skill: no summary body file" "$S" "post-body.md" 0
 assert_count "skill: no --body-file" "$S" "--body-file" 0
 
+assert_contains "skill: drafted comments review step" "$S" "Review the drafted comments"
+assert_contains "skill: drafts file for the user" "$S" "post-drafts.md"
+
 # Agent-neutral: no Claude-specific tool names anywhere under review/.
 hits=$(grep -rlE 'mcp__|Agent tool|subagent_type|TodoWrite' "$R" 2> /dev/null)
 assert_eq "review/ is agent-neutral" "" "$hits"
