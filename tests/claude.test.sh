@@ -45,6 +45,27 @@ assert_eq "link backs up real dir: linked" "$repo_hooks" "$(readlink "$cd/hooks"
 bak=$(compgen -G "$cd/hooks.bak.*" | head -n1)
 assert_eq "link backs up real dir: contents" "orig" "$(cat "$bak/x.sh" 2>/dev/null)"
 
+# link_path: generic symlink with the same rules
+src="$SANDBOX/repo/skills/review-council"
+mkdir -p "$src"
+dest="$SANDBOX/lp/skills/review-council"
+SKIPPED=() INSTALLED=()
+link_path "$src" "$dest"
+assert_eq "link_path fresh (creates parent)" "$src" "$(readlink "$dest")"
+assert_eq "link_path fresh: recorded installed" "1" "${#INSTALLED[@]}"
+link_path "$src" "$dest"
+assert_eq "link_path idempotent" "1" "${#SKIPPED[@]}"
+ln -sfn "$SANDBOX/elsewhere" "$dest"
+link_path "$src" "$dest"
+assert_eq "link_path replaces wrong symlink" "$src" "$(readlink "$dest")"
+dest2="$SANDBOX/lp2/review-council"
+mkdir -p "$dest2"
+printf 'mine\n' > "$dest2/SKILL.md"
+link_path "$src" "$dest2"
+assert_eq "link_path backs up real dir: linked" "$src" "$(readlink "$dest2")"
+bak=$(compgen -G "$dest2.bak.*" | head -n1)
+assert_eq "link_path backs up real dir: contents" "mine" "$(cat "$bak/SKILL.md" 2>/dev/null)"
+
 tpl="$ROOT/claude/settings-hooks.json"
 hd="$SANDBOX/h"
 

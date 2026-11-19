@@ -75,4 +75,14 @@ The devil's advocate's alternatives and any the architect raised: approach, stro
 Worktree path, base and head, files dropped from the diff, untracked files not reviewed, reviewers that failed or returned nothing, and anything else from the run notes.
 ```
 
+Also write `{{RUN_DIR}}/report-findings.json`, one entry per numbered
+finding, so findings can be posted to the PR by number:
+
+```json
+[{"number": "F1", "severity": "major", "path": "src/a.ts", "line": 12,
+  "body": "**Title**\n\nEvidence.\n\nSuggestion."}]
+```
+
+`path` and `line` may be `null` for a whole-PR finding.
+
 Then reply with just the report's path.

@@ -29,7 +29,8 @@ cat > "$SANDBOX/comments.json" << 'EOF2'
   {"path": "src/a.sh", "line": 11, "body": "F1: quote this"},
   {"path": "src/a.sh", "line": 50, "body": "F2: not in the diff"},
   {"path": "src/a.sh", "line": 9, "body": "F3: context line"},
-  {"path": "src/gone.sh", "line": 1, "body": "F4: deleted file"}
+  {"path": "src/gone.sh", "line": 1, "body": "F4: deleted file"},
+  {"path": null, "line": null, "body": "F5: whole PR"}
 ]
 EOF2
 args=(--repo acme/widgets --pr 7 --body-file "$SANDBOX/body.md" --comments "$SANDBOX/comments.json")
@@ -52,6 +53,7 @@ assert_eq "dry run: body kept" "yes" "$(jq -r .body <<< "$out" | grep -q 'Overal
 assert_eq "dry run: other findings heading" "yes" "$(jq -r .body <<< "$out" | grep -q '^### Other findings' && echo yes)"
 assert_eq "dry run: off-diff comment in body" "yes" "$(jq -r .body <<< "$out" | grep -qF '`src/a.sh:50` — F2: not in the diff' && echo yes)"
 assert_eq "dry run: deleted-file comment in body" "yes" "$(jq -r .body <<< "$out" | grep -qF 'F4: deleted file' && echo yes)"
+assert_eq "dry run: whole-PR comment without location" "yes" "$(jq -r .body <<< "$out" | grep -qxF -- '- F5: whole PR' && echo yes)"
 assert_eq "dry run: gh api not called" "0" "$(grep -c '^ARGS' "$LOG")"
 
 out=$("$PR" "${args[@]}" --event comment)

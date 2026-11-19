@@ -25,6 +25,8 @@ for s in "What this PR does" "Suggested verdict" "Where to focus" "Findings" \
   assert_contains "synthesizer: section $s" "$R/synthesizer.md" "## $s"
 done
 
+assert_contains "synthesizer: findings index file" "$R/synthesizer.md" "report-findings.json"
+
 # Agent-neutral: no Claude-specific tool names anywhere under review/.
 hits=$(grep -rlE 'mcp__|Agent tool|subagent_type|TodoWrite' "$R" 2> /dev/null)
 assert_eq "review/ is agent-neutral" "" "$hits"

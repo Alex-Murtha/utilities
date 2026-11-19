@@ -201,12 +201,13 @@ git_checkout_at() {
   INSTALLED+=("$label")
 }
 
-# link_claude_hooks <repo_hooks_dir> <claude_dir>
-# Make <claude_dir>/hooks a symlink to the repo's hooks directory. A real
-# directory is moved aside to hooks.bak.<timestamp> first.
-link_claude_hooks() {
-  local src=$1 cdir=$2 dest="$2/hooks" bak
-  mkdir -p -- "$cdir" || return 1
+# link_path <src> <dest>
+# Make <dest> a symlink to <src>, creating its parent directory. A correct
+# symlink is skipped, a wrong one replaced, and a real file or directory is
+# moved aside to <dest>.bak.<timestamp> first.
+link_path() {
+  local src=$1 dest=$2 bak
+  mkdir -p -- "$(dirname -- "$dest")" || return 1
   if [[ -L "$dest" ]]; then
     if [[ "$(readlink -- "$dest")" == "$src" ]]; then
       SKIPPED+=("$dest")
@@ -221,6 +222,10 @@ link_claude_hooks() {
   ln -s -- "$src" "$dest" || return 1
   INSTALLED+=("$dest")
 }
+
+# link_claude_hooks <repo_hooks_dir> <claude_dir>
+# Make <claude_dir>/hooks a symlink to the repo's hooks directory.
+link_claude_hooks() { link_path "$1" "$2/hooks"; }
 
 # merge_claude_settings <hooks_json> <settings_file> <hooks_dir>
 # Replace .hooks in the settings file with the template's .hooks (placeholder
@@ -558,6 +563,8 @@ step_claude() {
   try "claude hooks" link_claude_hooks "$UTILITIES_DIR/claude/hooks" "$HOME/.claude"
   try "claude settings" merge_claude_settings "$UTILITIES_DIR/claude/settings-hooks.json" \
     "$HOME/.claude/settings.json" "$HOME/.claude/hooks"
+  try "claude skill review-council" link_path "$UTILITIES_DIR/claude/skills/review-council" \
+    "$HOME/.claude/skills/review-council"
 }
 
 print_list() { # <title> <items...>
