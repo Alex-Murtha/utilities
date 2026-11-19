@@ -54,8 +54,10 @@ problems=$(jq -r '
            enum($x.ac_source; ["card", "inferred", "none"]; "extras.ac_source"),
            (if ($x.requirements | type) == "array" then
               ($x.requirements | to_entries[] | .key as $i | .value as $q | "extras.requirements[\($i)]" as $w
-               | str($q; "requirement"; $w), str($q; "where"; $w),
-                 enum($q.status; ["met", "not_met", "drift_documented", "drift_undocumented"]; "\($w).status"))
+               | if ($q | type) != "object" then "\($w): must be an object" else
+                   (str($q; "requirement"; $w), str($q; "where"; $w),
+                    enum($q.status; ["met", "not_met", "drift_documented", "drift_undocumented"]; "\($w).status"))
+                 end)
             else "extras.requirements must be an array" end))
        elif .reviewer == "security" then
         (.extras.aikido as $a
@@ -69,13 +71,19 @@ problems=$(jq -r '
          | if ($alts | type) != "array" then "extras.alternatives must be an array"
            elif ($alts | length) > 3 then "extras.alternatives has \($alts | length) entries; at most 3"
            else ($alts | to_entries[] | .key as $i | .value as $a | "extras.alternatives[\($i)]" as $w
-                 | str($a; "approach"; $w), str($a; "strongest_argument"; $w), str($a; "why_pr_may_still_win"; $w))
+                 | if ($a | type) != "object" then "\($w): must be an object" else
+                     (str($a; "approach"; $w), str($a; "strongest_argument"; $w), str($a; "why_pr_may_still_win"; $w))
+                   end)
            end)
        else empty end)
     ]
-  | .[]' "$file")
+  | .[]' "$file" 2>&1)
+status=$?
+if ((status != 0)) && [[ -z "$problems" ]]; then
+  problems="output does not match findings-schema.md (could not check it)"
+fi
 
-if [[ -n "$problems" ]]; then
+if ((status != 0)) || [[ -n "$problems" ]]; then
   printf '%s\n' "$problems"
   exit 1
 fi

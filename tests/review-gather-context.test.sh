@@ -46,6 +46,8 @@ assert_contains "branch: uncommitted change in diff" "$C/diff.patch" "src/b.sh"
 assert_count "branch: lockfile not in diff" "$C/diff.patch" "package-lock.json" 0
 assert_contains "branch: lockfile dropped" "$C/dropped.txt" "package-lock.json"
 assert_contains "branch: files list" "$C/files.txt" "src/a.sh"
+assert_eq "branch: diff size recorded" "$(wc -l < "$C/diff.patch" | tr -d ' ')" "$(jq -r .diff_lines "$C/meta.json")"
+assert_eq "branch: file count recorded" "2" "$(jq -r .changed_files "$C/meta.json")"
 assert_contains "branch: untracked listed" "$C/untracked.txt" "new.txt"
 
 # conventions
@@ -79,7 +81,7 @@ args="\$*"
 case "\$args" in
   "pr view 7 --json comments,reviews"*) echo '{"comments":[{"body":"Aikido: no issues"}],"reviews":[]}' ;;
   "pr view 7 --json"*) echo '{"number":7,"url":"https://github.com/acme/widgets/pull/7","title":"Fix ABC-9 crash","body":"Body","author":{"login":"dev"},"labels":[{"name":"bug"}],"headRefOid":"$head","baseRefName":"main","headRefName":"feature/ABC-123-foo"}' ;;
-  "pr checks 7"*) echo '[{"name":"Aikido Security","state":"SUCCESS","link":"https://example.com"}]' ;;
+  "pr checks 7"*) echo '[{"name":"Aikido Security","state":"PENDING","link":"https://example.com"}]'; exit 8 ;;
   *) echo "unexpected gh \$args" >&2; exit 1 ;;
 esac
 EOF
@@ -93,14 +95,20 @@ assert_eq "pr: kind" "pr" "$(jq -r .kind "$C/meta.json")"
 assert_eq "pr: number" "7" "$(jq -r .pr.number "$C/meta.json")"
 assert_eq "pr: head sha" "$head" "$(jq -r .pr.head_sha "$C/meta.json")"
 assert_eq "pr: branch key wins over title" "ABC-123" "$(jq -r .jira_key "$C/meta.json")"
-assert_eq "pr: checks.json valid" "Aikido Security" "$(jq -r '.[0].name' "$C/checks.json")"
+assert_eq "pr: checks.json kept when gh exits non-zero" "PENDING" "$(jq -r '.[0].state' "$C/checks.json")"
+assert_eq "pr: head branch recorded" "feature/ABC-123-foo" "$(jq -r .pr.head_branch "$C/meta.json")"
 assert_eq "pr: comments.json valid" "Aikido: no issues" "$(jq -r '.comments[0].body' "$C/comments.json")"
 assert_contains "pr: diff" "$C/diff.patch" "src/a.sh"
 assert_eq "pr: no untracked.txt" "no" "$([[ -e "$C/untracked.txt" ]] && echo yes || echo no)"
 
-# title key used when the branch has none
-git -C "$W" switch -q -c plain-branch
+# coordinator-made worktree on review-pr-7: key still comes from the PR head branch
+git -C "$W" switch -q -c review-pr-7
 run=$(PATH="$SANDBOX/bin:$PATH" "$GC" --worktree "$W" --pr 7)
-assert_eq "pr: title key when branch has none" "ABC-9" "$(jq -r .jira_key "$run/context/meta.json")"
+assert_eq "pr: key from PR head branch, not local branch" "ABC-123" "$(jq -r .jira_key "$run/context/meta.json")"
+
+# title key used when no branch has one
+sed -i 's|"headRefName":"feature/ABC-123-foo"|"headRefName":"plain"|' "$SANDBOX/bin/gh"
+run=$(PATH="$SANDBOX/bin:$PATH" "$GC" --worktree "$W" --pr 7)
+assert_eq "pr: title key when branches have none" "ABC-9" "$(jq -r .jira_key "$run/context/meta.json")"
 
 finish

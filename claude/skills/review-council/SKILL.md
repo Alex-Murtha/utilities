@@ -41,6 +41,11 @@ Run `$REVIEW_DIR/bin/parse-target [--branch] <target>`.
 
 All reviewers work from one checkout of the code under review.
 
+`<repo root>` is the user's local clone of `<owner>/<repo>`: the current
+directory's `git rev-parse --show-toplevel` if its `origin` is that repo,
+otherwise the matching entry in `$ORCA repo list --json`, otherwise ask the
+user where the clone is.
+
 **PR:**
 1. Look for an existing Orca worktree. First try
    `$ORCA reference find <url> --json`. If that finds nothing, look in
@@ -71,6 +76,11 @@ RUN=$("$REVIEW_DIR/bin/gather-context" --worktree <path> [--pr <n>])
 
 If `$RUN/context/diff.patch` is empty, tell the user there is nothing
 reviewable, show `dropped.txt`, and stop.
+
+If `meta.json` `diff_lines` is over 3000, tell the user the change is large
+and that reviewers will page through it; note it in the run notes. Every
+reviewer prompt already requires reading all of `diff.patch` and listing any
+file it could not cover.
 
 ### Jira → `$RUN/context/jira.json`
 
@@ -160,7 +170,9 @@ same placeholders, with `{{RUN_NOTES}}` set to `$RUN/run-notes.md`. Then:
 
 ## 7. Post (PR only, optional)
 
-Never offer this for a branch. For a PR, ask the user:
+Never offer this for a branch.
+Do not offer posting if the worktree did not match the PR head (the user
+chose to review it as it was): line numbers would point at the wrong code. Say so instead. For a PR, ask the user:
 1. Post to the PR? If not, stop.
 2. Which findings, by number (`F1, F3`), or `all`. Use `report-findings.json`.
 3. As **Comment** or **Request changes**. Never offer Approve; approval is

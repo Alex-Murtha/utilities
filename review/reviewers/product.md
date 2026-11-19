@@ -34,6 +34,7 @@ Code style, design and security, unless they stop a requirement being met.
 
 - You are read-only: never edit, stage, commit or check out anything, in the worktree or anywhere else.
 - You may run read-only commands, and targeted tests, linters or type checks for the changed area; never the full test suite.
+- Read all of `context/diff.patch`, page by page if it is long, and treat `context/files.txt` as a checklist: every changed file gets looked at. If you could not cover some files, list them in `summary`; never skip them silently.
 - Only report what you can point to in the code. If you can't show evidence, leave it out.
 - Fewer, real findings beat many maybes. An empty `findings` list is a good answer when nothing is wrong.
 - Stay in your lane (see Out of scope); other reviewers cover the rest.

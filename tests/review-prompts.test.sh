@@ -13,6 +13,7 @@ for name in product code architect security devils-advocate; do
   assert_contains "$name: read-only rule" "$f" "never edit, stage, commit or check out"
   assert_contains "$name: full suite rule" "$f" "never the full test suite"
   assert_contains "$name: schema reference" "$f" "findings-schema.md"
+  assert_contains "$name: whole-diff rule" "$f" "Read all of \`context/diff.patch\`"
   assert_contains "$name: worktree placeholder" "$f" "{{WORKTREE}}"
   assert_contains "$name: run dir placeholder" "$f" "{{RUN_DIR}}"
 done
@@ -26,6 +27,10 @@ for s in "What this PR does" "Suggested verdict" "Where to focus" "Findings" \
 done
 
 assert_contains "synthesizer: findings index file" "$R/synthesizer.md" "report-findings.json"
+
+S="$ROOT/claude/skills/review-council/SKILL.md"
+assert_contains "skill: no posting after mismatched review" "$S" "Do not offer posting if the worktree did not match the PR head"
+assert_contains "skill: large diff split" "$S" "diff_lines"
 
 # Agent-neutral: no Claude-specific tool names anywhere under review/.
 hits=$(grep -rlE 'mcp__|Agent tool|subagent_type|TodoWrite' "$R" 2> /dev/null)

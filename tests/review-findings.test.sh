@@ -26,6 +26,17 @@ assert_eq "missing file key named" "yes" "$(grep -q file <<< "$out" && echo yes)
 "$VF" "$F/too-many-alternatives.json" > /dev/null
 assert_eq "4 alternatives fails" "1" "$?"
 
+jq '.extras.requirements = ["x"]' "$F/valid-product.json" > "$SANDBOX/req-string.json"
+out=$("$VF" "$SANDBOX/req-string.json" 2>&1)
+assert_eq "non-object requirement fails" "1" "$?"
+assert_eq "non-object requirement named" "yes" "$(grep -q 'requirements\[0\]' <<< "$out" && echo yes)"
+jq -n '{reviewer:"devils-advocate",model:"claude",summary:"s",findings:[],extras:{alternatives:["x"]}}' > "$SANDBOX/alt-string.json"
+"$VF" "$SANDBOX/alt-string.json" > /dev/null 2>&1
+assert_eq "non-object alternative fails" "1" "$?"
+jq '.extras = {aikido: "clean"}' "$F/valid-product.json" | jq '.reviewer = "security"' > "$SANDBOX/sec-bad.json"
+"$VF" "$SANDBOX/sec-bad.json" > /dev/null 2>&1
+assert_eq "security with non-object aikido fails" "1" "$?"
+
 printf 'not json at all\n' > "$SANDBOX/garbage.txt"
 "$VF" "$SANDBOX/garbage.txt" > /dev/null
 assert_eq "no JSON at all fails" "1" "$?"

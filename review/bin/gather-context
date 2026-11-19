@@ -38,14 +38,16 @@ repo=$(basename "$(dirname "$common")")
 branch=$(g rev-parse --abbrev-ref HEAD)
 head=$(g rev-parse HEAD)
 
-prjson=null title="" body=""
+prjson=null title="" body="" head_branch=""
 if [[ -n "$pr" ]]; then
   view=$(cd "$wt" && gh pr view "$pr" --json number,url,title,body,author,labels,headRefOid,baseRefName,headRefName) ||
     die "gh pr view $pr failed"
   base=$(jq -r .baseRefName <<< "$view")
   title=$(jq -r '.title // ""' <<< "$view")
   body=$(jq -r '.body // ""' <<< "$view")
-  prjson=$(jq '{number, url, title, body, author: .author.login, labels: [.labels[].name], head_sha: .headRefOid, base: .baseRefName}' <<< "$view")
+  head_branch=$(jq -r '.headRefName // ""' <<< "$view")
+  prjson=$(jq '{number, url, title, body, author: .author.login, labels: [.labels[].name], head_sha: .headRefOid,
+    head_branch: .headRefName, base: .baseRefName}' <<< "$view")
   slug="pr-$pr"
 else
   base=$(g symbolic-ref --short refs/remotes/origin/HEAD 2> /dev/null)
@@ -78,7 +80,9 @@ comm -23 <(g diff --name-only "${range[@]}" | sort) <(g diff --name-only "${rang
 if [[ -z "$pr" ]]; then
   g ls-files --others --exclude-standard > "$C/untracked.txt"
 else
-  (cd "$wt" && gh pr checks "$pr" --json name,state,link) > "$C/checks.json" 2> /dev/null || echo '[]' > "$C/checks.json"
+  # gh exits non-zero (1 failed, 8 pending) while still printing the checks.
+  (cd "$wt" && gh pr checks "$pr" --json name,state,link) > "$C/checks.json" 2> /dev/null
+  jq -e 'type == "array"' "$C/checks.json" > /dev/null 2>&1 || echo '[]' > "$C/checks.json"
   (cd "$wt" && gh pr view "$pr" --json comments,reviews) > "$C/comments.json" || echo '{"comments":[],"reviews":[]}' > "$C/comments.json"
 fi
 
@@ -88,7 +92,9 @@ for f in CLAUDE.md AGENTS.md .github/copilot-instructions.md; do
 done
 
 key=""
-for s in "$branch" "$title" "$body"; do
+# PR: the PR's own head branch first (the local worktree may be review-pr-<n>).
+for s in "$head_branch" "$branch" "$title" "$body"; do
+  [[ -n "$s" ]] || continue
   key=$(grep -oE '[A-Z][A-Z0-9]+-[0-9]+' <<< "$s" | head -n1)
   [[ -n "$key" ]] && break
 done
@@ -96,8 +102,10 @@ done
 jq -n --arg kind "$([[ -n "$pr" ]] && echo pr || echo branch)" --arg repo "$repo" --arg wt "$wt" \
   --arg branch "$branch" --arg head "$head" --arg base "$base" --arg mb "$merge_base" \
   --arg key "$key" --argjson pr "$prjson" \
+  --argjson lines "$(wc -l < "$C/diff.patch")" --argjson files "$(grep -c . "$C/files.txt")" \
   '{kind: $kind, repo: $repo, worktree: $wt, branch: $branch, head_sha: $head, base_ref: $base,
-    merge_base: $mb, jira_key: (if $key == "" then null else $key end), pr: $pr}' > "$C/meta.json" ||
+    merge_base: $mb, jira_key: (if $key == "" then null else $key end), diff_lines: $lines,
+    changed_files: $files, pr: $pr}' > "$C/meta.json" ||
   die "cannot write meta.json"
 
 printf '%s\n' "$run"
