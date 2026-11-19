@@ -33,7 +33,7 @@ for f in "${BREW_FORMULAE[@]}"; do
 done
 
 # Official installers (names as they appear in the table).
-for t in nvm node corepack dotnet bicep bws claude homebrew code-new-roman-nerd-font; do
+for t in nvm node corepack dotnet bicep bws claude homebrew code-new-roman-nerd-font oh-my-zsh powerlevel10k; do
   check "installer row: $t" row_for "$t"
 done
 
@@ -47,7 +47,7 @@ while IFS= read -r name; do
 done < <(grep -E '^[|] .[^ ]+. [|] (dnf|brew)' "$TOOLS" | sed -E 's/^[|] .([^ ]+).[ ].*/\1/')
 
 # Pins documented.
-for v in "$NVM_VERSION" "$NERD_FONTS_VERSION" "$NODE_MAJOR" "${DOTNET_CHANNELS[@]}"; do
+for v in "$NVM_VERSION" "$NERD_FONTS_VERSION" "$NODE_MAJOR" "${DOTNET_CHANNELS[@]}" "$OMZ_REF" "$P10K_REF"; do
   assert_contains "pin in tools.md: $v" "$TOOLS" "$v"
 done
 
