@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# fetch-pr-comments --repo <owner/repo> --pr <n>
+# Prints every comment already on the PR as one JSON array:
+# [{"kind":"inline|review|conversation","author","path","line","outdated","body","url"}]
+# Inline comments whose code has since changed are "outdated" and keep their
+# original line. Reviews with an empty body (a bare approval) are left out.
+set -uo pipefail
+
+repo="" pr=""
+while (($#)); do
+  case $1 in
+    --repo) repo=${2:-}; shift 2 ;;
+    --pr) pr=${2:-}; shift 2 ;;
+    *) printf 'fetch-pr-comments: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+done
+[[ -n "$repo" && -n "$pr" ]] || { echo "usage: fetch-pr-comments --repo <owner/repo> --pr <n>" >&2; exit 2; }
+
+get() { gh api --paginate "repos/$repo/$1" --jq '.[]' | jq -s .; }
+
+inline=$(get "pulls/$pr/comments") || { echo "fetch-pr-comments: could not read inline comments" >&2; exit 1; }
+reviews=$(get "pulls/$pr/reviews") || { echo "fetch-pr-comments: could not read reviews" >&2; exit 1; }
+convo=$(get "issues/$pr/comments") || { echo "fetch-pr-comments: could not read PR comments" >&2; exit 1; }
+
+jq -n --argjson i "$inline" --argjson r "$reviews" --argjson c "$convo" '
+  ($i | map({kind: "inline", author: .user.login, path, line: (.line // .original_line),
+             outdated: (.line == null), body, url: .html_url}))
+  + ($r | map(select((.body // "") != "")
+             | {kind: "review", author: .user.login, path: null, line: null, outdated: false, body, url: .html_url}))
+  + ($c | map({kind: "conversation", author: .user.login, path: null, line: null, outdated: false, body, url: .html_url}))'

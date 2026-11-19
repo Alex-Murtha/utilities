@@ -81,6 +81,9 @@ into one report.
 - Reports and everything the run gathered go to
   `~/.cache/review-council/<repo>-<pr|branch>-<time>/` (`report.md`). They
   are never cleaned up automatically.
+- For a PR, findings someone already raised in a PR comment (a person or a
+  bot) are dropped. The report lists them under "Already raised on the PR"
+  with a link, so you can back that comment instead.
 - An existing Orca worktree for the PR is reused. Otherwise one is created
   and kept afterwards.
 - Posting to the PR is opt-in. You pick the findings and Comment or Request

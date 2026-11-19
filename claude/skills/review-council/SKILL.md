@@ -154,6 +154,30 @@ Save each reply (a JSON array) to `$RUN/verdicts/<name>.json`, then run:
 - If a verifier's reply isn't a JSON array, use `[]`. Its findings are then
   all marked `unverified`. Add a line to the run notes.
 
+## 5b. Check what is already on the PR (PR only)
+
+Skip this for a branch. Otherwise, after verification:
+
+1. Fetch the comments as they are now (people may have commented during the run):
+   ```bash
+   "$REVIEW_DIR/bin/fetch-pr-comments" --repo <owner>/<repo> --pr <n> > "$RUN/context/existing-comments.json"
+   ```
+   If it fails, or the array is empty, write `[]` to `$RUN/covered.json`,
+   note any failure in the run notes, and go on to the report.
+2. If any `verified/*.json` has findings, start one subagent with
+   `$REVIEW_DIR/already-raised.md` (same placeholders). Save its reply (a
+   JSON array) to `$RUN/covered.json`. If the reply isn't a JSON array, use
+   `[]` and add a note to the run notes.
+3. Drop the covered findings from each review:
+   ```bash
+   for f in "$RUN"/verified/*.json; do
+     "$REVIEW_DIR/bin/drop-covered" "$f" "$RUN/covered.json" > "$f.tmp" && mv "$f.tmp" "$f"
+   done
+   ```
+   `covered.json` stays as the record of what was dropped and who raised
+   it. The report lists those under "Already raised on the PR", with links,
+   so the user can back those comments instead of repeating them.
+
 ## 6. Report
 
 Write the run notes to `$RUN/run-notes.md`:
