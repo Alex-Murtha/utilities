@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# gather-context --worktree <path> [--pr <number>]
+# Builds the review bundle for a PR (worktree at the PR head) or a local
+# branch (worktree with the branch checked out, uncommitted changes included).
+# Creates a run directory under ${REVIEW_COUNCIL_CACHE:-~/.cache/review-council}
+# and prints its absolute path. Never modifies the worktree; only fetches refs.
+set -uo pipefail
+
+die() {
+  printf 'gather-context: %s\n' "$*" >&2
+  exit 1
+}
+
+wt="" pr=""
+while (($#)); do
+  case $1 in
+    --worktree) wt=${2:-}; shift 2 ;;
+    --pr) pr=${2:-}; shift 2 ;;
+    *) die "unknown argument: $1" ;;
+  esac
+done
+[[ -n "$wt" ]] || die "usage: gather-context --worktree <path> [--pr <number>]"
+wt=$(cd "$wt" 2> /dev/null && pwd) || die "no such directory: $wt"
+g() { git -C "$wt" "$@"; }
+[[ "$(g rev-parse --is-inside-work-tree 2> /dev/null)" == "true" ]] || die "not a git work tree: $wt"
+
+# Paths left out of the diff reviewers see.
+EXCLUDES=(
+  '**/package-lock.json' '**/yarn.lock' '**/pnpm-lock.yaml' '**/*.lock' '**/go.sum'
+  '**/*.min.js' '**/*.min.css' '**/*.map' '**/*.pb.go' '**/*_pb2.py' '**/*.generated.*'
+  '**/dist/**' '**/build/**' '**/vendor/**' '**/node_modules/**' '**/third_party/**'
+)
+pathspec=(.)
+for e in "${EXCLUDES[@]}"; do pathspec+=(":(exclude,glob)$e"); done
+
+common=$(g rev-parse --path-format=absolute --git-common-dir) || die "cannot find git dir"
+repo=$(basename "$(dirname "$common")")
+branch=$(g rev-parse --abbrev-ref HEAD)
+head=$(g rev-parse HEAD)
+
+prjson=null title="" body="" head_branch=""
+if [[ -n "$pr" ]]; then
+  view=$(cd "$wt" && gh pr view "$pr" --json number,url,title,body,author,labels,headRefOid,baseRefName,headRefName) ||
+    die "gh pr view $pr failed"
+  base=$(jq -r .baseRefName <<< "$view")
+  title=$(jq -r '.title // ""' <<< "$view")
+  body=$(jq -r '.body // ""' <<< "$view")
+  head_branch=$(jq -r '.headRefName // ""' <<< "$view")
+  prjson=$(jq '{number, url, title, body, author: .author.login, labels: [.labels[].name], head_sha: .headRefOid,
+    head_branch: .headRefName, base: .baseRefName}' <<< "$view")
+  slug="pr-$pr"
+else
+  base=$(g symbolic-ref --short refs/remotes/origin/HEAD 2> /dev/null)
+  base=${base#origin/}
+  [[ -n "$base" ]] || base=main
+  slug=${branch//\//-}
+fi
+
+g fetch -q origin "$base" 2> /dev/null || printf 'gather-context: warning: could not fetch origin/%s; using local ref\n' "$base" >&2
+merge_base=$(g merge-base "origin/$base" HEAD) || die "no merge-base with origin/$base"
+
+cache=${REVIEW_COUNCIL_CACHE:-$HOME/.cache/review-council}
+stamp=$(date +%Y%m%d-%H%M%S)
+run="$cache/$repo-$slug-$stamp"
+i=1
+while [[ -e "$run" ]]; do
+  i=$((i + 1))
+  run="$cache/$repo-$slug-$stamp-$i"
+done
+C="$run/context"
+mkdir -p "$C" || die "cannot create $C"
+
+# PR: committed range only. Branch: merge-base to the working tree.
+range=("$merge_base")
+[[ -n "$pr" ]] && range+=(HEAD)
+g diff "${range[@]}" -- "${pathspec[@]}" > "$C/diff.patch" || die "git diff failed"
+g diff --name-status "${range[@]}" -- "${pathspec[@]}" > "$C/files.txt"
+comm -23 <(g diff --name-only "${range[@]}" | sort) <(g diff --name-only "${range[@]}" -- "${pathspec[@]}" | sort) > "$C/dropped.txt"
+
+if [[ -z "$pr" ]]; then
+  g ls-files --others --exclude-standard > "$C/untracked.txt"
+else
+  # gh exits non-zero (1 failed, 8 pending) while still printing the checks.
+  (cd "$wt" && gh pr checks "$pr" --json name,state,link) > "$C/checks.json" 2> /dev/null
+  jq -e 'type == "array"' "$C/checks.json" > /dev/null 2>&1 || echo '[]' > "$C/checks.json"
+  (cd "$wt" && gh pr view "$pr" --json comments,reviews) > "$C/comments.json" || echo '{"comments":[],"reviews":[]}' > "$C/comments.json"
+fi
+
+: > "$C/conventions.txt"
+for f in CLAUDE.md AGENTS.md .github/copilot-instructions.md; do
+  [[ -f "$wt/$f" ]] && printf '%s\n' "$f" >> "$C/conventions.txt"
+done
+
+key=""
+# PR: the PR's own head branch first (the local worktree may be review-pr-<n>).
+for s in "$head_branch" "$branch" "$title" "$body"; do
+  [[ -n "$s" ]] || continue
+  key=$(grep -oE '[A-Z][A-Z0-9]+-[0-9]+' <<< "$s" | head -n1)
+  [[ -n "$key" ]] && break
+done
+
+jq -n --arg kind "$([[ -n "$pr" ]] && echo pr || echo branch)" --arg repo "$repo" --arg wt "$wt" \
+  --arg branch "$branch" --arg head "$head" --arg base "$base" --arg mb "$merge_base" \
+  --arg key "$key" --argjson pr "$prjson" \
+  --argjson lines "$(wc -l < "$C/diff.patch")" --argjson files "$(grep -c . "$C/files.txt")" \
+  '{kind: $kind, repo: $repo, worktree: $wt, branch: $branch, head_sha: $head, base_ref: $base,
+    merge_base: $mb, jira_key: (if $key == "" then null else $key end), diff_lines: $lines,
+    changed_files: $files, pr: $pr}' > "$C/meta.json" ||
+  die "cannot write meta.json"
+
+printf '%s\n' "$run"

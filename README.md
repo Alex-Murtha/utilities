@@ -69,6 +69,28 @@ root with `CODE_DIR`) unless the directory already exists. To pull changed or
 rotated secrets later, run `secrets-refresh` and open a new shell.
 `CLONE_REPOS` is read directly and is not written to `secrets.env`.
 
+## Code review (`/review-council`)
+
+`install.sh` links `claude/skills/review-council` into `~/.claude/skills/`.
+In Claude Code, `/review-council <PR URL | PR number | branch>` (no target
+means the current branch) runs five read-only reviewers (product/Jira,
+code, architect, security/Aikido, devil's advocate) on one Orca worktree of
+the change. A second pass tries to disprove each finding, and the rest go
+into one report.
+
+- Reports and everything the run gathered go to
+  `~/.cache/review-council/<repo>-<pr|branch>-<time>/` (`report.md`). They
+  are never cleaned up automatically.
+- An existing Orca worktree for the PR is reused. Otherwise one is created
+  and kept afterwards.
+- Posting to the PR is opt-in: you pick the findings and Comment or Request
+  changes, see a dry run, and confirm. It never approves.
+
+Reviewer instructions live in `review/` and are agent-neutral, so other
+agents can run them later. The helpers in `review/bin/` are tested by
+`tests/review-*.test.sh`. Design:
+[docs/superpowers/specs/2026-11-19-agent-code-review-design.md](docs/superpowers/specs/2026-11-19-agent-code-review-design.md).
+
 ## Adding a tool
 
 Add it to `DNF_PACKAGES` or `BREW_FORMULAE` in `install.sh` (or write an

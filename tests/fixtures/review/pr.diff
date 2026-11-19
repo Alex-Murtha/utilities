@@ -1,0 +1,19 @@
+diff --git a/src/a.sh b/src/a.sh
+index 1111111..2222222 100644
+--- a/src/a.sh
++++ b/src/a.sh
+@@ -8,3 +8,6 @@ setup() {
+ line8
+ line9
++added10
++added11
++added12
+ line13
+diff --git a/src/gone.sh b/src/gone.sh
+deleted file mode 100644
+index 3333333..0000000
+--- a/src/gone.sh
++++ /dev/null
+@@ -1,2 +0,0 @@
+-old1
+-old2

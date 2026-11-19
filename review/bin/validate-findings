@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# validate-findings <file>
+# Checks one reviewer's output against review/findings-schema.md. If the file
+# holds prose around a single JSON object (fenced or bare), the object is
+# extracted and the file rewritten to just that JSON first. Exit 0 if valid;
+# otherwise exit 1 and print one problem per line, ready to send back to the
+# reviewer.
+set -uo pipefail
+
+file=${1:?usage: validate-findings <file>}
+[[ -r "$file" ]] || { echo "cannot read $file"; exit 1; }
+
+if ! jq -e 'type == "object"' "$file" > /dev/null 2>&1; then
+  text=$(< "$file")
+  fenced=$(sed -n '/^[[:space:]]*```/,/^[[:space:]]*```/{/^[[:space:]]*```/d;p}' <<< "$text")
+  candidate=""
+  if [[ -n "$fenced" ]] && jq -e 'type == "object"' <<< "$fenced" > /dev/null 2>&1; then
+    candidate=$fenced
+  elif [[ "$text" == *"{"*"}"* ]]; then
+    bare="{${text#*\{}"
+    bare="${bare%\}*}}"
+    jq -e 'type == "object"' <<< "$bare" > /dev/null 2>&1 && candidate=$bare
+  fi
+  if [[ -z "$candidate" ]]; then
+    echo "output is not a JSON object: return exactly one JSON object as described in findings-schema.md"
+    exit 1
+  fi
+  tmp=$(mktemp "$(dirname -- "$file")/.vf.XXXXXX") || exit 1
+  jq . <<< "$candidate" > "$tmp" && mv -- "$tmp" "$file"
+fi
+
+problems=$(jq -r '
+  def enum($v; $allowed; $where): if ($allowed | index($v)) then empty else "\($where): \($v | tojson) is not one of \($allowed | join(", "))" end;
+  def str($o; $k; $where): if ($o | has($k)) and ($o[$k] | type) == "string" then empty else "\($where): \"\($k)\" must be a string" end;
+  . as $r
+  | ["product", "code", "architect", "security", "devils-advocate"] as $reviewers
+  | [
+      (if has("reviewer") then enum(.reviewer; $reviewers; "reviewer") else "missing \"reviewer\"" end),
+      str($r; "model"; "top level"),
+      str($r; "summary"; "top level"),
+      (if (.findings | type) == "array" then empty else "\"findings\" must be an array" end),
+      (if (.extras | type) == "object" then empty else "\"extras\" must be an object" end),
+      ((.findings // []) | to_entries[]? | .key as $i | .value as $f | "findings[\($i)]" as $w
+        | (if ($f | type) != "object" then "\($w): must be an object" else
+            (str($f; "id"; $w), str($f; "title"; $w), str($f; "evidence"; $w), str($f; "suggestion"; $w),
+             (if $f | has("severity") then enum($f.severity; ["blocker", "major", "minor", "nit"]; "\($w).severity") else "\($w): missing \"severity\"" end),
+             (if $f | has("confidence") then enum($f.confidence; ["high", "medium", "low"]; "\($w).confidence") else "\($w): missing \"confidence\"" end),
+             (if ($f | has("file")) and (($f.file | type) == "string" or $f.file == null) then empty else "\($w): \"file\" is required (a path, or null for a whole-PR finding)" end),
+             (if ($f.line == null) or (($f.line | type) == "number") then empty else "\($w): \"line\" must be a number or null" end))
+          end)),
+      (if .reviewer == "product" then
+        (.extras as $x
+         | (if ($x | has("card")) and (($x.card | type) == "string" or $x.card == null) then empty else "extras.card must be a Jira key or null" end),
+           enum($x.ac_source; ["card", "inferred", "none"]; "extras.ac_source"),
+           (if ($x.requirements | type) == "array" then
+              ($x.requirements | to_entries[] | .key as $i | .value as $q | "extras.requirements[\($i)]" as $w
+               | if ($q | type) != "object" then "\($w): must be an object" else
+                   (str($q; "requirement"; $w), str($q; "where"; $w),
+                    enum($q.status; ["met", "not_met", "drift_documented", "drift_undocumented"]; "\($w).status"))
+                 end)
+            else "extras.requirements must be an array" end))
+       elif .reviewer == "security" then
+        (.extras.aikido as $a
+         | if ($a | type) != "object" then "extras.aikido must be an object" else
+             (enum($a.pr_check; ["passed", "failed", "pending", "missing", "n/a"]; "extras.aikido.pr_check"),
+              enum($a.scan; ["clean", "issues", "not_scanned"]; "extras.aikido.scan"),
+              str($a; "notes"; "extras.aikido"))
+           end)
+       elif .reviewer == "devils-advocate" then
+        (.extras.alternatives as $alts
+         | if ($alts | type) != "array" then "extras.alternatives must be an array"
+           elif ($alts | length) > 3 then "extras.alternatives has \($alts | length) entries; at most 3"
+           else ($alts | to_entries[] | .key as $i | .value as $a | "extras.alternatives[\($i)]" as $w
+                 | if ($a | type) != "object" then "\($w): must be an object" else
+                     (str($a; "approach"; $w), str($a; "strongest_argument"; $w), str($a; "why_pr_may_still_win"; $w))
+                   end)
+           end)
+       else empty end)
+    ]
+  | .[]' "$file" 2>&1)
+status=$?
+if ((status != 0)) && [[ -z "$problems" ]]; then
+  problems="output does not match findings-schema.md (could not check it)"
+fi
+
+if ((status != 0)) || [[ -n "$problems" ]]; then
+  printf '%s\n' "$problems"
+  exit 1
+fi

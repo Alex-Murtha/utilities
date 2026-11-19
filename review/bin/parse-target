@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# parse-target [--branch] [<target>]
+# Prints JSON describing what to review: a GitHub PR (URL, number or #number)
+# or a local branch (a name, or null for the current branch). --branch forces
+# the target to be read as a branch name. Exits 2 on a URL it doesn't know.
+set -uo pipefail
+
+force_branch=0
+if [[ "${1:-}" == "--branch" ]]; then
+  force_branch=1
+  shift
+fi
+target=${1:-}
+
+branch_json() { jq -n --arg b "$1" '{kind: "branch", branch: (if $b == "" then null else $b end)}'; }
+
+if ((force_branch)) || [[ -z "$target" ]]; then
+  branch_json "$target"
+  exit 0
+fi
+
+re='^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)([/?#].*)?$'
+if [[ "$target" =~ $re ]]; then
+  o=${BASH_REMATCH[1]} r=${BASH_REMATCH[2]} n=${BASH_REMATCH[3]}
+  jq -n --arg o "$o" --arg r "$r" --argjson n "$n" \
+    '{kind: "pr", owner: $o, repo: $r, number: $n, url: "https://github.com/\($o)/\($r)/pull/\($n)"}'
+  exit 0
+fi
+
+if [[ "$target" =~ ^https?:// ]]; then
+  printf 'parse-target: not a GitHub pull request URL: %s\n' "$target" >&2
+  exit 2
+fi
+
+if [[ "$target" =~ ^#?([0-9]+)$ ]]; then
+  jq -n --argjson n "${BASH_REMATCH[1]}" '{kind: "pr", owner: null, repo: null, number: $n, url: null}'
+  exit 0
+fi
+
+branch_json "$target"

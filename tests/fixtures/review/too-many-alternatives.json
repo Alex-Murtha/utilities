@@ -1,0 +1,30 @@
+{
+  "reviewer": "devils-advocate",
+  "model": "claude",
+  "summary": "s",
+  "findings": [],
+  "extras": {
+    "alternatives": [
+      {
+        "approach": "a",
+        "strongest_argument": "b",
+        "why_pr_may_still_win": "c"
+      },
+      {
+        "approach": "a",
+        "strongest_argument": "b",
+        "why_pr_may_still_win": "c"
+      },
+      {
+        "approach": "a",
+        "strongest_argument": "b",
+        "why_pr_may_still_win": "c"
+      },
+      {
+        "approach": "a",
+        "strongest_argument": "b",
+        "why_pr_may_still_win": "c"
+      }
+    ]
+  }
+}

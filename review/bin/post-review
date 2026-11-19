@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# post-review --repo <owner/repo> --pr <n> --event COMMENT|REQUEST_CHANGES
+#             --body-file <md> --comments <json> [--dry-run]
+# Posts one PR review. <json> is [{"path","line","body"}]. Comments whose line
+# is not on the right side of the PR diff can't be inline, so they go into the
+# body under "### Other findings". Never approves: any other event exits 2
+# before gh is called.
+set -uo pipefail
+
+die() {
+  printf 'post-review: %s\n' "$2" >&2
+  exit "$1"
+}
+
+repo="" pr="" event="" body_file="" comments="" dry=0
+while (($#)); do
+  case $1 in
+    --repo) repo=${2:-}; shift 2 ;;
+    --pr) pr=${2:-}; shift 2 ;;
+    --event) event=${2:-}; shift 2 ;;
+    --body-file) body_file=${2:-}; shift 2 ;;
+    --comments) comments=${2:-}; shift 2 ;;
+    --dry-run) dry=1; shift ;;
+    *) die 2 "unknown argument: $1" ;;
+  esac
+done
+
+event=${event^^}
+case $event in
+  COMMENT | REQUEST_CHANGES) ;;
+  APPROVE) die 2 "refusing to approve: approval is always manual" ;;
+  *) die 2 "event must be COMMENT or REQUEST_CHANGES, got '$event'" ;;
+esac
+[[ -n "$repo" && -n "$pr" && -r "$body_file" && -r "$comments" ]] ||
+  die 2 "usage: post-review --repo <owner/repo> --pr <n> --event COMMENT|REQUEST_CHANGES --body-file <md> --comments <json> [--dry-run]"
+jq -e 'type == "array"' "$comments" > /dev/null 2>&1 || die 2 "$comments is not a JSON array"
+
+diff=$(gh pr diff "$pr" --repo "$repo") || die 1 "gh pr diff failed"
+
+# Right-side (new file) line numbers that a review comment can attach to:
+# {"path": [line, ...], ...}
+commentable=$(awk '
+  /^\+\+\+ / { path = substr($0, 5); sub(/^b\//, "", path); if (path == "/dev/null") path = ""; next }
+  /^--- / { next }
+  /^@@ / { split($3, a, ","); n = substr(a[1], 2) + 0; next }
+  path == "" { next }
+  /^[ +]/ { printf "%s\t%d\n", path, n; n++; next }
+' <<< "$diff" | jq -R -s '
+  split("\n") | map(select(length > 0) | split("\t") | {path: .[0], line: (.[1] | tonumber)})
+  | group_by(.path) | map({key: .[0].path, value: map(.line)}) | from_entries')
+
+payload=$(jq --arg event "$event" --rawfile body "$body_file" --argjson ok "$commentable" '
+  def inline: . as $c | ($c.line | type) == "number" and (($ok[$c.path] // []) | index($c.line)) != null;
+  (map(select(inline))) as $in
+  | (map(select(inline | not))) as $out
+  | {
+      event: $event,
+      body: ($body + (if ($out | length) > 0
+        then "\n\n### Other findings\n\n" + ($out | map(if .path == null then "- \(.body)" else "- `\(.path):\(.line // "-")` — \(.body)" end) | join("\n"))
+        else "" end)),
+      comments: ($in | map({path, line, side: "RIGHT", body}))
+    }' "$comments") || die 1 "could not build the review payload"
+
+if ((dry)); then
+  printf '%s\n' "$payload"
+  exit 0
+fi
+gh api -X POST "repos/$repo/pulls/$pr/reviews" --input - <<< "$payload"
