@@ -76,13 +76,23 @@ Worktree path, base and head, files dropped from the diff, untracked files not r
 ```
 
 Also write `{{RUN_DIR}}/report-findings.json`, one entry per numbered
-finding, so findings can be posted to the PR by number:
+finding. The number is only for the user to pick findings to post; it is
+never posted.
 
 ```json
-[{"number": "F1", "severity": "major", "path": "src/a.ts", "line": 12,
-  "body": "**Title**\n\nEvidence.\n\nSuggestion."}]
+[{"number": "F1", "path": "src/a.ts", "line": 12,
+  "body": "This retry loop never stops on a 404, so a bad request spins forever. Could it only retry 5xx and network errors?"}]
 ```
 
-`path` and `line` may be `null` for a whole-PR finding.
+- `path` and `line` point at the code the comment is about. Prefer a line
+  that is part of the change. Use another file only when the fix has to
+  happen outside the PR. `path` and `line` may be `null` for a comment
+  about the PR as a whole.
+- `body` is the comment exactly as it will appear on the PR, written the
+  way a thoughtful colleague would write it: plain sentences that say what
+  the problem is, why it matters, and what to change. It contains
+  never a finding number, severity, verdict or reviewer name, and no
+  headings or labels like "Suggestion:". Use code formatting for
+  identifiers. 2–5 sentences.
 
 Then reply with just the report's path.
