@@ -40,6 +40,15 @@ assert_count "skill: no --body-file" "$S" "--body-file" 0
 assert_contains "skill: drafted comments review step" "$S" "Review the drafted comments"
 assert_contains "skill: drafts file for the user" "$S" "post-drafts.md"
 
+A="$R/already-raised.md"
+assert_contains "already-raised: existing comments input" "$A" "existing-comments.json"
+assert_contains "already-raised: output fields" "$A" '"comment_url"'
+assert_contains "already-raised: read-only rule" "$A" "never edit, stage, commit or check out"
+assert_contains "synthesizer: already-raised section" "$R/synthesizer.md" "## Already raised on the PR"
+assert_contains "synthesizer: covered input" "$R/synthesizer.md" "covered.json"
+assert_contains "skill: already-raised step" "$S" "Check what is already on the PR"
+assert_contains "skill: uses drop-covered" "$S" "drop-covered"
+
 # Agent-neutral: no Claude-specific tool names anywhere under review/.
 hits=$(grep -rlE 'mcp__|Agent tool|subagent_type|TodoWrite' "$R" 2> /dev/null)
 assert_eq "review/ is agent-neutral" "" "$hits"

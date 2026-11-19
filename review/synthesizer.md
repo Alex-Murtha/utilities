@@ -15,6 +15,9 @@ in the time it takes to read one page.
   findings are already gone.
 - `{{RUN_DIR}}/context/`: `meta.json`, `diff.patch`, `files.txt`,
   `dropped.txt`, `untracked.txt` (branch only), `jira.json`, `aikido.json`.
+- `{{RUN_DIR}}/covered.json` (PR only, may be missing or `[]`): findings
+  that were dropped because someone already raised them on the PR,
+  `[{"id","title","comment_url","author","reason"}]`.
 - `{{RUN_NOTES}}`: run details from the coordinator (worktree used, reviewers
   that failed, anything skipped).
 - `{{WORKTREE}}`: the checkout, if you need to look something up.
@@ -56,7 +59,10 @@ Write `{{RUN_DIR}}/report.md` with exactly these sections, in this order:
 Grouped under **Blockers**, **Major**, **Minor** (and **Nits** if kept). Each:
 **F1. Title** (`file:line`) · severity · verdict · raised by: code, architect
 Evidence. Suggestion.
-If there are none: "No findings survived verification."
+If there are none: "No findings survived verification." If every finding was already raised on the PR, say that instead.
+
+## Already raised on the PR
+Findings dropped because someone already commented on them, from `covered.json`. One bullet each: what the issue is (plain words), who raised it, and the link, so the user can back that comment. For example: "Early return skips the reset: raised by @bot-reviewer: https://...". Leave this section out when `covered.json` is missing or empty.
 
 ## JIRA requirements
 Card key and summary, then a table: requirement | status | where.

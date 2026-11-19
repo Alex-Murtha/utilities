@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# drop-covered <review.json> <covered.json>
+# Prints the review without the findings listed in covered.json
+# ([{"id","title","comment_url","author","reason"}]): issues someone already
+# raised on the PR.
+set -uo pipefail
+
+review=${1:?usage: drop-covered <review.json> <covered.json>}
+covered=${2:?usage: drop-covered <review.json> <covered.json>}
+
+jq --slurpfile c "$covered" '($c[0] | map(.id)) as $ids | .findings |= map(select(.id as $x | $ids | index($x) | not))' "$review"
